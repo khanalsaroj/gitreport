@@ -45,7 +45,7 @@ gitreport --help
 
 > **Coming soon**
 
-Or download a prebuilt binary for your platform from the [Releases](https://github.com/khanalsaroj/typegenctl/releases)
+Or download a prebuilt binary for your platform from the [Releases](https://github.com/khanalsaroj/gitreport/releases)
 page.
 
 ---
