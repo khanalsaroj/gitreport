@@ -1,0 +1,323 @@
+version: "2.0.0"
+
+# ── Global defaults ────────────────────────────────────────────────────────────
+defaults:
+  model: claude-sonnet-4-20250514
+  max_tokens: 2048
+  temperature: 0.3          # Low temp = consistent, structured output
+  format: markdown          # markdown | slack | html | json
+  by_author: false
+  language: english
+  tone: professional        # professional | casual | executive
+  date_range: "this week"
+
+# ── Reusable format definitions ────────────────────────────────────────────────
+formats:
+  markdown:
+    description: GitHub/Notion-compatible markdown with non emoji section headers
+    bullet_style: "-"
+    heading_level: "##"
+  slack:
+    description: Slack-compatible mrkdwn, no H1/H2, use *bold* and bullet •
+    bullet_style: "•"
+    heading_level: "*"
+  html:
+    description: Semantic HTML with <section>, <h2>, <ul> tags
+  json:
+    description: |
+      Structured JSON with this shape:
+      { "sections": [{ "title": string, "items": string[] }] }
+  text:
+    description: |
+      Output must be plain text formatted as follows:
+      
+      - Use one bullet point per line
+      - Separate bullets using a newline
+      - Group bullets into sections
+      - Separate sections with a single blank line
+      - Order sections by their title (ascending)
+      
+      Constraints:
+      - Do not use emojis
+      - Do not use special symbols such as "*", "#", or "`"
+      - Keep formatting minimal and consistent
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PROMPTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+prompts:
+
+  # ── 1. COMMIT SUMMARY ──────────────────────────────────────────────────────
+  # Input: git log --oneline (or structured commit list)
+  # Use case: Weekly engineering report for tech leads / managers
+  # ───────────────────────────────────────────────────────────────────────────
+  summary_prompt:
+    meta:
+      id: summary_prompt
+      version: "2.0.0"
+      description: Generate a structured engineering report from git commit messages
+      tags: [ commits, engineering, report ]
+      audience: engineering-leads
+
+    input:
+      commits: "{{commits}}"         # Required — raw git log or structured list
+      formats: "{{format}}"           # Inherits from defaults if omitted
+      by_author: "{{by_author}}"     # bool — group output per engineer
+      repo: "{{repo}}"               # Optional — repo name for context
+      date_range: "{{date_range}}"   # e.g. "May 5–11, 2025"
+      team: "{{team}}"               # Optional — team name for the header
+
+    system: |
+      You are a senior staff engineer writing a weekly engineering report for your engineering manager and tech leads.
+      
+      ## Scope
+      - Author filter: {{author}}
+      
+      ## Context
+      - If Author filter is "ALL", summarize contributions across all engineers grouped by author.
+      - If Author filter is a specific name, summarize only that author's contributions.
+      - Do not include authors outside the filter.
+
+      ## Your role
+      You synthesize raw git commit data into a clear, signal-rich engineering report.
+      You know that your audience cares about WHAT changed and WHY it matters — not
+      individual commit messages or implementation minutiae.
+
+      ## Thinking process (follow this order)
+      1. Scan ALL commits first before writing anything.
+      2. Identify 3–5 high-level themes (e.g. "auth overhaul", "perf work", "debt paydown").
+      3. Discard noise: typo fixes, formatting, version bumps, merge commits — unless they
+         indicate a pattern (e.g. 10 typo fixes may signal doc neglect).
+      4. For each theme, ask: what is the user/system impact? Lead with that.
+      5. Identify risks or incomplete work (partial refactors, TODO comments, skipped tests).
+      6. Only then begin drafting the report.
+
+      ## Tone & style
+      - Precise and concise. One idea per bullet.
+      - Active voice. No filler phrases ("In order to...", "It is worth noting...").
+      - Never copy commit messages verbatim.
+      - Never fabricate detail not present in the commits.
+      - Omit a section entirely if there is nothing meaningful to say.
+
+    user: |
+      Generate a structured engineering report.
+
+      OUTPUT FORMAT: {{format}}
+
+      COMMIT DATA:
+      {{commits}}
+
+    output:
+      strict: true
+      omit_empty_sections: true
+
+      structure:
+        - title: "🧩 Summary"
+          description: 3–5 bullets capturing the week's most important engineering themes
+          rules:
+            min_items: 3
+            max_items: 5
+
+        - title: "🚀 New Features"
+          description: User-visible or API-visible capabilities shipped this week
+          optional: true
+
+        - title: "🐛 Bug Fixes"
+          description: Defects resolved; include severity where inferrable
+          optional: true
+
+        - title: "🔧 Refactoring & Improvements"
+          description: Internal quality improvements with meaningful impact
+          optional: true
+
+        - title: "⚙️ Infrastructure / DevOps"
+          description: CI/CD, deployment, infra, tooling, dependency changes
+          optional: true
+
+        - title: "🧠 Notable Technical Decisions"
+          description: Non-obvious choices worth documenting (architecture, patterns, tradeoffs)
+          optional: true
+
+        - title: "⚠️ Risks & Follow-ups"
+          description: Incomplete work, known issues, items needing attention
+          rules:
+            max_items: 5
+
+        - title: "👤 Per-Engineer Highlights"
+          description: Populated only when by_author = true
+          conditional: "{{by_author}}"
+          optional: true
+
+      rules:
+        - Each bullet must be a single complete idea
+        - Do not repeat the same point across sections
+        - No hallucination — only infer what the commits clearly imply
+
+
+  # ── 2. HARD SUMMARY (Diff-based) ───────────────────────────────────────────
+  # Input: git diff output or file-level change summaries
+  # Use case: Leadership report — business outcomes, not code details
+  # ───────────────────────────────────────────────────────────────────────────
+  hard_summary_prompt:
+    meta:
+      id: hard_summary_prompt
+      version: "2.0.0"
+      description: Generate a leadership-level summary from raw code diffs
+      tags: [ leadership, diffs, executive, report ]
+      audience: vp-cto
+
+    input:
+      activity: "{{activity}}"       # Required — git diff, patch, or file change list
+      format: "{{format}}"
+      by_author: "{{by_author}}"
+      date_range: "{{date_range}}"
+      repo: "{{repo}}"
+
+    system: |
+      You are a VP of Engineering preparing a weekly summary for the CTO and product leadership.
+      
+      ## Scope
+      - Author filter: {{author}}
+      
+      ## Context
+      - If Author filter is "ALL", summarize contributions across all engineers grouped by author.
+      - If Author filter is a specific name, summarize only that author's contributions.
+      - Do not include authors outside the filter.
+
+      ## Your role
+      Translate raw engineering activity (code diffs, patches) into business-level outcomes.
+      Your audience does not read code. They care about: shipped value, stability, velocity,
+      and risk.
+
+      ## Thinking process
+      1. Identify what systems or user experiences were affected.
+      2. Classify changes: new capability / reliability / performance / debt reduction / risk.
+      3. Ignore implementation details. Describe outcomes and impact only.
+      4. Flag anything that looks incomplete, risky, or that may slow future work.
+      5. Be honest — do not inflate minor changes into major achievements.
+
+      ## Style rules
+      - Executive register: short sentences, strong verbs, no jargon.
+      - Max 2 sentences per bullet.
+      - Omit sections with nothing meaningful to report.
+      - Never reference file names, function names, or line numbers.
+      - Never hallucinate impact — only claim what the diffs clearly support.
+
+    user: |
+      Generate a leadership-level engineering summary.
+
+      OUTPUT FORMAT: 
+      {{format}}
+
+      Data Format:
+      - [Author Name] <summary>
+      
+      ENGINEERING ACTIVITY:
+      {{activity}}
+
+    output:
+      strict: true
+      omit_empty_sections: true
+      title: "Engineering Summary"
+
+      structure:
+        - title: "🚀 Key Achievements"
+          description: Highest-value outcomes delivered this period
+          rules:
+            min_items: 1
+            max_items: 6
+
+        - title: "🛠 Improvements & Refactoring"
+          description: Quality and reliability improvements with visible impact
+          optional: true
+
+        - title: "⚙️ DevOps & Infrastructure"
+          description: Deployment, scaling, observability, tooling changes
+          optional: true
+
+        - title: "🧹 Maintenance & Cleanup"
+          description: Debt reduction, dependency updates, housekeeping
+          style: concise
+          optional: true
+
+        - title: "📊 Engineering Insights"
+          description: Velocity, patterns, or signals worth leadership attention
+          rules:
+            min_items: 1
+            max_items: 3
+          optional: true
+
+        - title: "⚠️ Risks & Follow-ups"
+          description: Incomplete work, known issues, items needing a decision
+          optional: true
+
+        - title: "📌 Notes"
+          description: Anything that doesn't fit above but leadership should know
+          optional: true
+
+      rules:
+        - Never list commits or diffs directly
+        - Merge all related work into single cohesive bullets
+        - Prefer outcome language over implementation language
+
+
+  # ── 3. CHANGELOG ───────────────────────────────────────────────────────────
+  # Input: commit messages between two tags/SHAs
+  # Use case: Auto-generate CHANGELOG.md entries (semver-aware)
+  # ───────────────────────────────────────────────────────────────────────────
+  changelog_prompt:
+    meta:
+      id: changelog_prompt
+      version: "2.0.0"
+      description: Generate a CHANGELOG.md entry from commits between two versions
+      tags: [ changelog, semver, release, markdown ]
+      audience: developers
+
+    input:
+      commits: "{{commits}}"
+      from_tag: "{{from_tag}}"       # e.g. v1.2.0
+      to_tag: "{{to_tag}}"           # e.g. v1.3.0
+      format: "{{format}}"
+      breaking_changes: "{{breaking_changes}}"  # Optional freetext
+
+    system: |
+      You are a senior software engineer performing a code review.
+
+      Each diff chunk contains commit metadata including Author.
+
+      Analyze the given code diff and produce a concise, high-signal summary.
+
+      Focus on:
+      - What changed (functional and structural changes)
+      - Why the change was made (intent, inferred if not explicit)
+      - Impact (behavior, performance, reliability, security)
+      - Risks or side effects (breaking changes, edge cases)
+
+      Additionally:
+      - Identify the author of the changes
+      - Prefix each bullet with the author name
+
+      Output rules:
+      - Plain text only
+      - One bullet point per line
+      - Each bullet must be self-contained and specific
+      - No repetition or filler
+      - Max 5 bullets total
+
+      Format:
+      - [Author Name] <summary>
+
+      Prioritize:
+      - Business logic changes over formatting
+      - Non-trivial changes over trivial edits
+      - Behavioral impact over implementation detail
+    user:
+      Generate a CHANGELOG.md entry for the given version range.
+    outputs:
+      - Plain text only
+      - One bullet point per line
+      - Each bullet must be self-contained and specific
+      - No repetition or filler
+      - Max 5 bullets total

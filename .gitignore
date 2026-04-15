@@ -1,0 +1,78 @@
+# =========================
+# IntelliJ IDEA / GoLand
+# =========================
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# JetBrains workspace-specific files
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/dictionaries
+.idea/libraries
+
+# =========================
+# Go build artifacts
+# =========================
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+
+# Output folders
+bin/
+dist/
+build/
+
+# Go workspace file (optional)
+go.work
+go.work.sum
+
+# =========================
+# Logs & temp files
+# =========================
+*.log
+*.out
+*.tmp
+tmp/
+
+# =========================
+# OS-specific files
+# =========================
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# Linux
+*~
+
+# =========================
+# Environment / Secrets
+# =========================
+.env
+.env.*
+*.env
+
+# Your config file (IMPORTANT)
+.gitreport/setting.json
+
+# =========================
+# Vendor (optional)
+# =========================
+# Uncomment if you DO NOT want to commit dependencies
+# vendor/
+
+# =========================
+# Coverage & profiling
+# =========================
+coverage.out
+*.coverprofile
