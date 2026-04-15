@@ -1,0 +1,178 @@
+# gitreport
+
+**gitreport** is a developer-focused CLI tool that transforms raw Git commit history into structured, high-quality engineering reports using AI.
+
+It analyzes commits across one or multiple repositories, intelligently groups related changes (features, bug fixes, refactors), and generates concise, leadership-ready summaries. The tool eliminates the manual effort of writing weekly reports and provides clear visibility into engineering progress.
+
+Designed for modern teams, GitStory supports flexible time filters, author-based breakdowns, and customizable AI prompts—making it suitable for both individual developers and team-level reporting.
+
+---
+
+## Features
+
+- **Two report modes**: commit-message based (`summary`) or diff-based (`hard-summary`)
+- **Multi-repo support**: analyze one repo, a list, or scan recursively
+- **Author grouping**: break down contributions by engineer
+- **Streaming output**: results print progressively, no waiting
+- **Flexible formats**: `text`, `markdown`, `json`
+- **Prompt-driven**: all AI prompts live in `config/summary.yaml` — no hardcoded strings
+
+---
+
+## ⚙️ Installation
+
+### 🪟 Windows (PowerShell installer)
+
+Open **PowerShell as Administrator**:
+
+```powershell
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/khanalsaroj/gitreport/refs/heads/main/main/install.ps1 | iex
+```
+
+> ***Restart your terminal after installation.***
+
+### Verify Installation
+
+```bash
+gitreport --help
+```
+
+### 🐧 Linux
+
+> **Coming soon**
+
+Or download a prebuilt binary for your platform from the [Releases](https://github.com/khanalsaroj/typegenctl/releases)
+page.
+
+---
+
+## Configuration
+
+Instead of using environment variables, configure the application using files in your home directory.
+
+**Example (Windows):
+```bash
+C:\Users\<user>\.gitreport\
+```
+
+
+
+### 1. Create Settings File
+
+Create a file at:
+
+```bash
+~/.gitreport/setting.json
+```
+
+Example:
+
+```json
+{
+  "OPENAI_API_KEY": "sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "OPENAI_BASE_URL": "https://openrouter.ai/api/v1/chat/completions",
+  "OPENAI_MODEL": "nvidia/nemotron-3-super-120b-a12b:free"
+}
+```
+
+Notes:
+
+* `OPENAI_API_KEY` (required): Your API key
+* `OPENAI_BASE_URL` (optional): Override for custom providers (Azure, Ollama, Groq, etc.)
+* `OPENAI_MODEL` (optional): Model to use
+
+---
+
+### 2. Create Summary Configuration
+
+Create the summary configuration file at:
+
+```bash
+~/.gitreport/config/gitreport.yaml
+```
+
+> **Required:** This file must exist when using `summary` and `hard-summary` mode.
+
+**Example (default template):**
+[gitreport.yaml](https://raw.githubusercontent.com/khanalsaroj/gitreport/refs/heads/main/config/gitreport.yaml)
+
+---
+
+### About `gitreport.yaml`
+
+The `gitreport.yaml` file defines the prompt templates used by the AI model to generate reports.
+You can fully customize these templates to match your reporting style, level of detail, and audience.
+
+---
+
+### Repository-Specific Configuration (Optional)
+
+You can override the global configuration on a per-repository basis.
+
+To do this, add a config file inside your repository:
+
+```bash
+config/gitreport.yaml
+```
+
+This allows different repositories to use tailored prompt templates while keeping a global default.
+
+
+---
+
+## Usage
+
+### Summary (commit messages)
+
+```bash
+# Last week of commits in current repo
+gitreport summary --week 1
+
+# Last 3 days, by author Name
+gitreport summary --days 3 --author John Doe
+
+# Last month, markdown output saved to file
+gitreport summary --month 1 --format markdown --output report.md
+
+# Multiple repos
+gitreport summary --week 1 --projects /path/to/repo1,/path/to/repo2
+
+```
+
+### Hard Summary (code diffs)
+
+```bash
+# Deep analysis of last week's diffs
+gitreport hard-summary --week 1
+
+# Leadership report in markdown
+gitreport hard-summary --week 1 --format markdown
+
+# Specific repos, JSON output
+gitreport hard-summary --days 5 \
+  --projects /srv/api,/srv/frontend \
+  --format json \
+  --output weekly.json
+```
+
+---
+
+## Flags
+
+| Flag         | Type   | Description                                       |
+|--------------|--------|---------------------------------------------------|
+| `--week`     | int    | Look back N weeks (mutually exclusive)            |
+| `--days`     | int    | Look back N days (mutually exclusive)             |
+| `--month`    | int    | Look back N months (mutually exclusive)           |
+| `--author`   | string | Commit by Author Name                             |
+| `--projects` | string | Comma-separated list of repo paths                |
+| `--format`   | string | Output format: `text`, `markdown`, `json`, `html` |
+| `--output`   | string | Write output to file instead of stdout            |
+
+> **Note:** Only one of `--week`, `--days`, `--month` may be used per invocation.
+
+---
