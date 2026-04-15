@@ -13,9 +13,10 @@ Designed for modern teams, GitStory supports flexible time filters, author-based
 - **Two report modes**: commit-message based (`summary`) or diff-based (`hard-summary`)
 - **Multi-repo support**: analyze one repo, a list, or scan recursively
 - **Author grouping**: break down contributions by engineer
+- **Automated setup**: use `init` to quickly bootstrap your local configuration
 - **Streaming output**: results print progressively, no waiting
 - **Flexible formats**: `text`, `markdown`, `json`
-- **Prompt-driven**: all AI prompts live in `config/summary.yaml` — no hardcoded strings
+- **Prompt-driven**: all AI prompts live in `gitreport.yaml` — no hardcoded strings
 
 ---
 
@@ -52,24 +53,30 @@ page.
 
 ## Configuration
 
-Instead of using environment variables, configure the application using files in your home directory.
+The easiest way to configure **gitreport** is to use the `init` command:
 
-**Example (Windows):
+```bash
+gitreport init
+```
+
+This will automatically create the required configuration files in your home directory:
+- `~/.gitreport/setting.json` (API keys and model settings)
+- `~/.gitreport/config/gitreport.yaml` (AI prompt templates)
+
+---
+
+### Manual Configuration (Optional)
+
+If you prefer to configure the tool manually, create the following files in your home directory.
+
+**Example (Windows):**
 ```bash
 C:\Users\<user>\.gitreport\
 ```
 
+### 1. Settings File
 
-
-### 1. Create Settings File
-
-Create a file at:
-
-```bash
-~/.gitreport/setting.json
-```
-
-Example:
+Create a file at `~/.gitreport/setting.json`:
 
 ```json
 {
@@ -80,20 +87,15 @@ Example:
 ```
 
 Notes:
-
 * `OPENAI_API_KEY` (required): Your API key
 * `OPENAI_BASE_URL` (optional): Override for custom providers (Azure, Ollama, Groq, etc.)
 * `OPENAI_MODEL` (optional): Model to use
 
 ---
 
-### 2. Create Summary Configuration
+### 2. Summary Configuration
 
-Create the summary configuration file at:
-
-```bash
-~/.gitreport/config/gitreport.yaml
-```
+Create the summary configuration file at `~/.gitreport/config/gitreport.yaml`:
 
 > **Required:** This file must exist when using `summary` and `hard-summary` mode.
 
