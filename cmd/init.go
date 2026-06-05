@@ -44,14 +44,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	gitreportDir := filepath.Join(home, ".gitreport")
 	configDir := filepath.Join(gitreportDir, "config")
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	// 0700: the directory holds the API key, so restrict it to the owner.
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
 		return fmt.Errorf("could not create %q: %w", configDir, err)
 	}
 
 	out := cmd.OutOrStdout()
 
+	// setting.json holds the API key, so it is owner-read/write only (0600).
 	settingPath := filepath.Join(gitreportDir, "setting.json")
-	if err := writeIfAbsent(out, settingPath, []byte(defaultSettings), 0o644); err != nil {
+	if err := writeIfAbsent(out, settingPath, []byte(defaultSettings), 0o600); err != nil {
 		return err
 	}
 

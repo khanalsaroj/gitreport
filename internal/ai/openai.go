@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -67,6 +68,9 @@ func NewOpenAIProvider() (*OpenAIProvider, error) {
 	if baseURL == "" {
 		return nil, fmt.Errorf("OPENAI_BASE_URL is not set; set it in setting.json or the environment")
 	}
+	if err := validateBaseURL(baseURL); err != nil {
+		return nil, err
+	}
 
 	model := firstNonEmpty(os.Getenv("OPENAI_MODEL"), fileModel)
 	if model == "" {
@@ -79,6 +83,20 @@ func NewOpenAIProvider() (*OpenAIProvider, error) {
 		model:   model,
 		client:  &http.Client{Timeout: 5 * time.Minute},
 	}, nil
+}
+
+// validateBaseURL ensures the endpoint that receives the bearer token is a
+// well-formed absolute http(s) URL. This avoids transmitting the API key to a
+// malformed or unexpected (e.g. file://) destination.
+func validateBaseURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("OPENAI_BASE_URL %q is not a valid URL: %w", raw, err)
+	}
+	if (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("OPENAI_BASE_URL %q must be an absolute http(s) URL", raw)
+	}
+	return nil
 }
 
 // firstNonEmpty returns the first argument that is not the empty string.
