@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 
+	"github.com/khanalsaroj/gitreport/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -82,11 +85,16 @@ gitreport hard-summary --week 1 --format markdown --output report.md
 `,
 	SilenceUsage:  true,
 	SilenceErrors: true,
+	Version:       version.String(),
 }
 
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	// Cancel in-flight work (git commands, AI streaming) on Ctrl-C or SIGTERM.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }

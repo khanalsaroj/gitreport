@@ -36,7 +36,7 @@ func (s *HardSummary) Stream(ctx context.Context, activity, format string, byAut
 		byAuthor = "ALL"
 	}
 
-	chunks := s.chunker.Split(activity) //TODO
+	chunks := s.chunker.Split(activity)
 	var finalActivity string
 
 	if len(chunks) > 1 {
@@ -50,11 +50,11 @@ func (s *HardSummary) Stream(ctx context.Context, activity, format string, byAut
 	}
 
 	// Final pass: produce the structured report
-	system := buildPrompt(prompt.System, map[string]string{
+	system := config.Render(prompt.System, config.Vars{
 		"author": byAuthor,
 	})
-	formatSpec := getFormatSpec(s.cfg, format)
-	user := buildPrompt(prompt.User, map[string]string{
+	formatSpec := s.cfg.FormatSpec(format)
+	user := config.Render(prompt.User, config.Vars{
 		"format":   formatSpec,
 		"activity": finalActivity,
 	})
@@ -87,7 +87,7 @@ func (s *HardSummary) summarizeChunks(
 		return nil, fmt.Errorf("getting prompt: %w", err)
 	}
 
-	chunkSystem := buildPrompt(prompt.System, map[string]string{})
+	chunkSystem := config.Render(prompt.System, nil)
 
 	type result struct {
 		index int

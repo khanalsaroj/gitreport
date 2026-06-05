@@ -31,13 +31,13 @@ func (s *Summary) Stream(ctx context.Context, commits, format string, byAuthor s
 		byAuthor = "ALL"
 	}
 
-	formatSpec := getFormatSpec(s.cfg, format)
+	formatSpec := s.cfg.FormatSpec(format)
 
-	system := buildPrompt(prompt.System, map[string]string{
+	system := config.Render(prompt.System, config.Vars{
 		"author": byAuthor,
 	})
 
-	user := buildPrompt(prompt.User, map[string]string{
+	user := config.Render(prompt.User, config.Vars{
 		"format":  formatSpec,
 		"commits": commits,
 	})
@@ -59,23 +59,6 @@ func (s *Summary) Stream(ctx context.Context, commits, format string, byAuthor s
 	}()
 
 	return outCh, nil
-}
-
-// buildPrompt replaces {{key}} placeholders in a template string.
-func buildPrompt(template string, vars map[string]string) string {
-	result := template
-	for k, v := range vars {
-		result = strings.ReplaceAll(result, "{{"+k+"}}", v)
-	}
-	return result
-}
-
-func getFormatSpec(cfg *config.Config, format string) string {
-	if f, ok := cfg.Formats[format]; ok {
-		return f.Description
-	}
-
-	return "No specific formatting rules provided. Use clean, structured output."
 }
 
 func buildOutputSpec(cfg *config.PromptOutput) string {

@@ -6,10 +6,8 @@ on:
       - main
     paths-ignore:
       - docs/**
-      - config/**
       - README.md
       - .gitignore
-      - main/install.sh
       - main/install.ps1
 
 jobs:
@@ -20,15 +18,15 @@ jobs:
 
     steps:
       # 1. Checkout code
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       # 2. Setup Go
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version-file: go.mod
 
       # 3. Analyze last commit to determine version bump
       - name: Get commit message
@@ -96,7 +94,7 @@ jobs:
               local archive_name="${CTL_NAME}-${target}.zip"
 
               GOOS=$os GOARCH=$arch go build \
-                -ldflags "-X github.com/sarojkhanal/gitreport/internal/version.Version=$VERSION" \
+                -ldflags "-X github.com/khanalsaroj/gitreport/internal/version.Version=$VERSION" \
                 -o "dist/$binary_name" \
                 ./
 
@@ -106,7 +104,7 @@ jobs:
               local archive_name="${CTL_NAME}-${target}.tar.gz"
 
               GOOS=$os GOARCH=$arch go build \
-                -ldflags "-X github.com/sarojkhanal/gitreport/internal/version.Version=$VERSION" \
+                -ldflags "-X github.com/khanalsaroj/gitreport/internal/version.Version=$VERSION" \
                 -o "dist/$binary_name" \
                 ./
 

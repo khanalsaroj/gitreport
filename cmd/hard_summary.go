@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/khanalsaroj/gitreport/internal/ai"
@@ -60,8 +59,7 @@ func runHardSummary(cmd *cobra.Command, args []string) error {
 
 	sum := summarizer.NewHardSummary(provider, cfg)
 
-	ctx := context.Background()
-	stream, err := sum.Stream(ctx, diffs, flagFormat, flagByAuthor)
+	stream, err := sum.Stream(cmd.Context(), diffs, flagFormat, flagByAuthor)
 	if err != nil {
 		return fmt.Errorf("generating hard summary: %w", err)
 	}

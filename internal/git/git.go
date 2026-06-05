@@ -4,43 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
-	"time"
-
-	"github.com/khanalsaroj/gitreport/internal/timeutil"
 )
-
-// GetCommitMessages retrieves commit message subjects from all repos since the given time.
-func GetCommitMessages(repos []string, since time.Time) ([]string, error) {
-	var all []string
-	sinceStr := timeutil.FormatGit(since)
-
-	for _, repo := range repos {
-		out, err := runGit(repo, "log",
-			"--since="+sinceStr,
-			"--pretty=format:%an: %s",
-			"--no-merges",
-		)
-		if err != nil {
-			return nil, fmt.Errorf("git log in %q: %w", repo, err)
-		}
-		if out == "" {
-			continue
-		}
-
-		lines := splitLines(out)
-
-		if len(repos) > 1 {
-			repoName := repoBaseName(repo)
-			for i, l := range lines {
-				lines[i] = fmt.Sprintf("[%s] %s", repoName, l)
-			}
-		}
-
-		all = append(all, lines...)
-	}
-
-	return all, nil
-}
 
 // repoBaseName returns the last component of a repo path.
 func repoBaseName(path string) string {

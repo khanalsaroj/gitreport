@@ -118,57 +118,65 @@ type OutputSectionRules struct {
 	MaxItems *int `yaml:"max_items,omitempty"`
 }
 
-// Load reads and parses the config file, searching in order:
+// Load reads and parses the configuration, searching in order:
 //  1. GITREPORT_CONFIG env var
 //  2. ./config/gitreport.yaml  (local project config)
 //  3. ~/.gitreport/config/gitreport.yaml  (user-level config)
+//  4. the embedded Default config (always available)
+//
+// The embedded default guarantees gitreport works out of the box even before
+// `gitreport init` has been run.
 func Load() (*Config, error) {
-	path, err := resolvePath()
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("reading config %q: %w", path, err)
-	}
+	data, source := readConfig()
 
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parsing config %q: %w", path, err)
+		return nil, fmt.Errorf("parsing config %s: %w", source, err)
 	}
 
 	if err := cfg.validate(); err != nil {
-		return nil, fmt.Errorf("invalid config %q: %w", path, err)
+		return nil, fmt.Errorf("invalid config %s: %w", source, err)
 	}
 
 	return &cfg, nil
 }
 
-// resolvePath returns the first config file path that exists.
-func resolvePath() (string, error) {
-	if p := os.Getenv("GITREPORT_CONFIG"); p != "" {
-		return p, nil
-	}
-
-	candidates := []string{
-		"config/gitreport.yaml",
-		func() string {
-			home, _ := os.UserHomeDir()
-			return filepath.Join(home, ".gitreport", "config", "gitreport.yaml")
-		}(),
-	}
-
-	for _, p := range candidates {
-		if _, err := os.Stat(p); err == nil {
-			return p, nil
+// readConfig returns the raw config bytes and a human-readable source label for
+// use in error messages. It falls back to the embedded Default when no config
+// file is present on disk.
+func readConfig() (data []byte, source string) {
+	if p := resolvePath(); p != "" {
+		if b, err := os.ReadFile(p); err == nil {
+			return b, fmt.Sprintf("%q", p)
 		}
 	}
+	return Default, "(embedded default)"
+}
 
-	return "", fmt.Errorf(
-		"no config file found; set GITREPORT_CONFIG or create one of: %s",
-		strings.Join(candidates, ", "),
-	)
+// resolvePath returns the first config file path that exists, or "" if none do.
+func resolvePath() string {
+	candidates := configCandidates()
+	for _, p := range candidates {
+		if p == "" {
+			continue
+		}
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
+
+// configCandidates lists the on-disk config locations in priority order.
+func configCandidates() []string {
+	candidates := []string{
+		os.Getenv("GITREPORT_CONFIG"),
+		filepath.Join("config", "gitreport.yaml"),
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, filepath.Join(home, ".gitreport", "config", "gitreport.yaml"))
+	}
+	return candidates
 }
 
 // validate checks structural correctness after unmarshalling.
@@ -219,73 +227,30 @@ func (c *Config) PromptNames() []string {
 	return names
 }
 
-// Format returns the FormatDef for a given format key (e.g. "markdown"),
-// falling back to the defaults format, then nil if unknown.
-func (c *Config) Format(key string) *FormatDef {
+// FormatSpec returns the human-readable formatting instructions for a format
+// key (e.g. "markdown"), falling back to the default format and finally to a
+// generic instruction when the key is unknown. The returned string is fed to
+// the model as the OUTPUT FORMAT specification.
+func (c *Config) FormatSpec(key string) string {
 	if key == "" {
 		key = c.Defaults.Format
 	}
-	return c.Formats[key]
+	if f, ok := c.Formats[key]; ok && f != nil && f.Description != "" {
+		return f.Description
+	}
+	return "No specific formatting rules provided. Use clean, structured output."
 }
 
-// Vars is a map of template variable names to their rendered values.
-// Keys correspond to {{variable}} placeholders in system/user templates.
+// Vars maps template variable names to their rendered values. Keys correspond
+// to {{variable}} placeholders in prompt templates.
 type Vars map[string]string
 
-// Render substitutes all {{key}} placeholders in the prompt's system and user
-// templates using the provided vars, then returns the rendered pair.
-// Missing keys are left as-is so callers can detect unresolved placeholders.
-func (p *Prompt) Render(vars Vars) (system, user string) {
-	system = renderTemplate(p.System, vars)
-	user = renderTemplate(p.User, vars)
-	return system, user
-}
-
-// MissingVars returns placeholder names present in the templates but absent
-// from vars. Useful for pre-flight checks before calling the AI API.
-func (p *Prompt) MissingVars(vars Vars) []string {
-	all := extractPlaceholders(p.System + p.User)
-	missing := make([]string, 0)
-	for _, key := range all {
-		if _, ok := vars[key]; !ok {
-			missing = append(missing, key)
-		}
-	}
-	return missing
-}
-
-// renderTemplate replaces every {{key}} occurrence with vars[key].
-func renderTemplate(tmpl string, vars Vars) string {
-	result := tmpl
+// Render replaces every {{key}} placeholder in tmpl with its value from vars.
+// Unknown placeholders are left untouched so callers can detect them. It is the
+// single template-substitution primitive shared across the codebase.
+func Render(tmpl string, vars Vars) string {
 	for key, val := range vars {
-		result = strings.ReplaceAll(result, "{{"+key+"}}", val)
+		tmpl = strings.ReplaceAll(tmpl, "{{"+key+"}}", val)
 	}
-	return result
-}
-
-// extractPlaceholders returns all unique {{key}} names found in a template string.
-func extractPlaceholders(tmpl string) []string {
-	seen := map[string]bool{}
-	var keys []string
-
-	for {
-		start := strings.Index(tmpl, "{{")
-		if start == -1 {
-			break
-		}
-		end := strings.Index(tmpl[start:], "}}")
-		if end == -1 {
-			break
-		}
-		key := strings.TrimSpace(tmpl[start+2 : start+end])
-		if !strings.HasPrefix(key, "#") && !strings.HasPrefix(key, "/") && key != "else" {
-			if !seen[key] {
-				seen[key] = true
-				keys = append(keys, key)
-			}
-		}
-		tmpl = tmpl[start+end+2:]
-	}
-
-	return keys
+	return tmpl
 }

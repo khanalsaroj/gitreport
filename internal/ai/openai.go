@@ -14,11 +14,6 @@ import (
 	"time"
 )
 
-const (
-	defaultBaseURL = ""
-	defaultModel   = ""
-)
-
 // OpenAIProvider implements AIProvider using the OpenAI-compatible chat completions API.
 type OpenAIProvider struct {
 	apiKey  string
@@ -54,35 +49,28 @@ func loadSettings() (*settings, error) {
 	return &cfg, nil
 }
 
-// NewOpenAIProvider creates a provider from environment variables.
+// NewOpenAIProvider creates a provider, sourcing credentials from environment
+// variables first and falling back to ~/.gitreport/setting.json. Environment
+// variables always take precedence so they can override file settings in CI.
 func NewOpenAIProvider() (*OpenAIProvider, error) {
-
-	cfg, _ := loadSettings()
-
-	apiKey := os.Getenv("OPENAI_API_KEY")
-	if apiKey == "" && cfg != nil {
-		apiKey = cfg.APIKey
+	var fileKey, fileURL, fileModel string
+	if cfg, _ := loadSettings(); cfg != nil {
+		fileKey, fileURL, fileModel = cfg.APIKey, cfg.BaseURL, cfg.Model
 	}
+
+	apiKey := firstNonEmpty(os.Getenv("OPENAI_API_KEY"), fileKey)
 	if apiKey == "" {
-		return nil, fmt.Errorf("OPENAI_API_KEY is not set in env or settings.json")
+		return nil, fmt.Errorf("OPENAI_API_KEY is not set; run `gitreport init` then add your key, or set the environment variable")
 	}
 
-	// --- BASE URL ---
-	baseURL := os.Getenv("OPENAI_BASE_URL")
-	if baseURL == "" && cfg != nil && cfg.BaseURL != "" {
-		baseURL = cfg.BaseURL
-	}
+	baseURL := firstNonEmpty(os.Getenv("OPENAI_BASE_URL"), fileURL)
 	if baseURL == "" {
-		baseURL = defaultBaseURL
+		return nil, fmt.Errorf("OPENAI_BASE_URL is not set; set it in setting.json or the environment")
 	}
 
-	// --- MODEL ---
-	model := os.Getenv("OPENAI_MODEL")
-	if model == "" && cfg != nil && cfg.Model != "" {
-		model = cfg.Model
-	}
+	model := firstNonEmpty(os.Getenv("OPENAI_MODEL"), fileModel)
 	if model == "" {
-		model = defaultModel
+		return nil, fmt.Errorf("OPENAI_MODEL is not set; set it in setting.json or the environment")
 	}
 
 	return &OpenAIProvider{
@@ -91,6 +79,16 @@ func NewOpenAIProvider() (*OpenAIProvider, error) {
 		model:   model,
 		client:  &http.Client{Timeout: 5 * time.Minute},
 	}, nil
+}
+
+// firstNonEmpty returns the first argument that is not the empty string.
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // homeDir returns the current user's home directory on Windows, macOS, and Linux.
