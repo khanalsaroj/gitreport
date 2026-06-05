@@ -11,6 +11,7 @@ Designed for modern teams, gitreport supports flexible time filters, author-base
 ## Features
 
 - **Two report modes**: commit-message based (`summary`) or diff-based (`hard-summary`)
+- **Automatic provider selection**: uses Claude Code if installed, then OpenAI, Gemini, Grok, or OpenRouter — with graceful fallback ([details](docs/PROVIDERS.md))
 - **Multi-repo support**: analyze one repo, a list, or scan recursively
 - **Author grouping**: break down contributions by engineer
 - **Automated setup**: use `init` to quickly bootstrap your local configuration
@@ -87,9 +88,15 @@ Create a file at `~/.gitreport/setting.json`:
 ```
 
 Notes:
-* `OPENAI_API_KEY` (required): Your API key
+* `OPENAI_API_KEY`: Your API key (used for the OpenRouter fallback tier)
 * `OPENAI_BASE_URL` (optional): Override for custom providers (Azure, Ollama, Groq, etc.)
 * `OPENAI_MODEL` (optional): Model to use
+
+> **No key needed for Claude Code.** If the `claude` CLI is installed and
+> authenticated, gitreport uses it automatically and no API key is required.
+> To add OpenAI, Gemini, or Grok, or to change the priority order, see
+> **[docs/PROVIDERS.md](docs/PROVIDERS.md)**. Check what is detected with
+> `gitreport providers`.
 
 ---
 
@@ -189,8 +196,12 @@ gitreport hard-summary --days 5 \
 | `--projects` | string | Comma-separated list of repo paths                |
 | `--format`   | string | Output format: `text`, `markdown`, `json`         |
 | `--output`   | string | Write output to file instead of stdout            |
+| `--provider` | string | Force a specific AI provider (default: auto-detect) |
+| `--verbose`  | bool   | Log provider selection and fallback to stderr     |
 
-Run `gitreport --version` to print the build version.
+Run `gitreport --version` to print the build version, and `gitreport providers`
+to see which AI providers are detected. Provider configuration is documented in
+**[docs/PROVIDERS.md](docs/PROVIDERS.md)**.
 
 > **Note:** Only one of `--week`, `--days`, `--month` may be used per invocation.
 
