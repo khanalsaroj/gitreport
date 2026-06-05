@@ -126,7 +126,7 @@ type chatMessage struct {
 	Content string `json:"content"`
 }
 
-// sseEvent is a parsed server-sent event chunk.
+// sseChunk is a parsed server-sent event chunk from the chat completions stream.
 type sseChunk struct {
 	Choices []struct {
 		Delta struct {

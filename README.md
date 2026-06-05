@@ -4,7 +4,7 @@
 
 It analyzes commits across one or multiple repositories, intelligently groups related changes (features, bug fixes, refactors), and generates concise, leadership-ready summaries. The tool eliminates the manual effort of writing weekly reports and provides clear visibility into engineering progress.
 
-Designed for modern teams, GitStory supports flexible time filters, author-based breakdowns, and customizable AI prompts—making it suitable for both individual developers and team-level reporting.
+Designed for modern teams, gitreport supports flexible time filters, author-based breakdowns, and customizable AI prompts—making it suitable for both individual developers and team-level reporting.
 
 ---
 
@@ -99,8 +99,11 @@ Create the summary configuration file at `~/.gitreport/config/gitreport.yaml`:
 
 > **Required:** This file must exist when using `summary` and `hard-summary` mode.
 
+> **Tip:** `gitreport init` already writes this file for you from the
+> configuration baked into the binary, so manual setup is rarely needed.
+
 **Example (default template):**
-[gitreport.yaml](https://raw.githubusercontent.com/khanalsaroj/gitreport/refs/heads/main/config/gitreport.yaml)
+[default.yaml](https://raw.githubusercontent.com/khanalsaroj/gitreport/refs/heads/main/internal/config/default.yaml)
 
 ---
 
@@ -122,6 +125,18 @@ config/gitreport.yaml
 ```
 
 This allows different repositories to use tailored prompt templates while keeping a global default.
+
+### Configuration Resolution Order
+
+gitreport loads the first configuration it finds, in this order:
+
+1. `$GITREPORT_CONFIG` — explicit path via environment variable
+2. `./config/gitreport.yaml` — project-local config (repo-specific override)
+3. `~/.gitreport/config/gitreport.yaml` — user-level config (written by `init`)
+4. The default configuration embedded in the binary
+
+Because the default is embedded, gitreport works out of the box even before
+`init` has been run — only an API key is required.
 
 
 ---
@@ -172,9 +187,45 @@ gitreport hard-summary --days 5 \
 | `--month`    | int    | Look back N months (mutually exclusive)           |
 | `--author`   | string | Commit by Author Name                             |
 | `--projects` | string | Comma-separated list of repo paths                |
-| `--format`   | string | Output format: `text`, `markdown`, `json`, `html` |
+| `--format`   | string | Output format: `text`, `markdown`, `json`         |
 | `--output`   | string | Write output to file instead of stdout            |
 
+Run `gitreport --version` to print the build version.
+
 > **Note:** Only one of `--week`, `--days`, `--month` may be used per invocation.
+
+> **Note:** Additional output formats (for example `slack` and `html`) can be
+> defined in `gitreport.yaml` and selected with `--format`; the model is
+> instructed using that format's description.
+
+---
+
+## Development
+
+Requires Go (see [`go.mod`](go.mod) for the minimum version).
+
+```bash
+# Build the binary
+go build -o gitreport .
+
+# Run the test suite
+go test ./...
+
+# Vet and format checks
+go vet ./...
+gofmt -l .
+```
+
+A `Makefile` wraps the common tasks:
+
+```bash
+make build   # compile ./gitreport
+make test    # go test ./...
+make check   # vet + gofmt + test
+```
+
+The default prompt configuration lives at
+[`internal/config/default.yaml`](internal/config/default.yaml) and is embedded
+into the binary at build time.
 
 ---

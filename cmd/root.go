@@ -45,7 +45,7 @@ hard-summary
   Produces more accurate, context-aware reports.
   Uses AI to understand code changes and team dynamics.
   Recommended for deeper analysis and team reports.
-  User more tokens.
+  Uses more tokens.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚙️ TIME FILTERS
