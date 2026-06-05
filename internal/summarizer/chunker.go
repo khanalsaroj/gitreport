@@ -1,6 +1,9 @@
 package summarizer
 
-import "strings"
+import (
+	"strings"
+	"unicode/utf8"
+)
 
 // Chunker splits large text inputs into token-approximate chunks.
 type Chunker struct {
@@ -79,14 +82,20 @@ func splitOnDiffBoundary(text string) []string {
 	return sections
 }
 
-// hardSplit splits a string into chunks of maxChars, breaking at newlines where possible.
+// hardSplit splits a string into chunks of at most maxChars bytes, preferring
+// to break at a newline. When no newline is available within the limit it falls
+// back to the nearest UTF-8 rune boundary so a multi-byte character is never
+// split across two chunks.
 func hardSplit(text string, maxChars int) []string {
 	var chunks []string
 	for len(text) > maxChars {
-		// Find the last newline within the limit
 		cut := maxChars
 		if idx := strings.LastIndex(text[:cut], "\n"); idx > 0 {
 			cut = idx + 1
+		} else {
+			for cut > 1 && !utf8.RuneStart(text[cut]) {
+				cut--
+			}
 		}
 		chunks = append(chunks, text[:cut])
 		text = text[cut:]
