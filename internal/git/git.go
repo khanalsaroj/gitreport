@@ -3,16 +3,19 @@ package git
 import (
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
-// repoBaseName returns the last component of a repo path.
+// repoBaseName returns the last component of a repo path. It accepts both
+// forward- and backslash-separated paths so multi-repo labels are correct on
+// Windows as well as Unix.
 func repoBaseName(path string) string {
-	parts := strings.Split(strings.TrimRight(path, "/"), "/")
-	if len(parts) > 0 {
-		return parts[len(parts)-1]
+	trimmed := strings.TrimRight(path, `/\`)
+	if trimmed == "" {
+		return path
 	}
-	return path
+	return filepath.Base(trimmed)
 }
 
 // splitLines splits output into non-empty lines.
