@@ -9,80 +9,72 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
 
-// OpenAIProvider implements AIProvider using the OpenAI-compatible chat completions API.
-type OpenAIProvider struct {
+// httpProvider talks to any OpenAI-compatible chat-completions endpoint. A
+// single implementation backs OpenAI, Gemini, Grok, and OpenRouter; they differ
+// only in name, base URL, model, and credentials.
+type httpProvider struct {
+	name    string
 	apiKey  string
 	baseURL string
 	model   string
 	client  *http.Client
 }
 
-type settings struct {
-	APIKey  string `json:"OPENAI_API_KEY"`
-	BaseURL string `json:"OPENAI_BASE_URL"`
-	Model   string `json:"OPENAI_MODEL"`
+// newHTTPProvider builds an OpenAI-compatible provider. The HTTP client carries
+// a generous timeout because report generation streams for a while.
+func newHTTPProvider(name, apiKey, baseURL, model string) *httpProvider {
+	return &httpProvider{
+		name:    name,
+		apiKey:  apiKey,
+		baseURL: baseURL,
+		model:   model,
+		client:  &http.Client{Timeout: 5 * time.Minute},
+	}
 }
 
-func loadSettings() (*settings, error) {
-	home, err := homeDir()
-	if err != nil {
-		return nil, fmt.Errorf("resolve home directory: %w", err)
+func (p *httpProvider) Name() string { return p.name }
+
+// Available verifies the provider is configured without making a network call.
+func (p *httpProvider) Available(ctx context.Context) error {
+	if p.apiKey == "" {
+		return fmt.Errorf("%s: API key not configured", p.name)
 	}
-
-	settingsPath := filepath.Join(home, ".gitreport", "setting.json")
-
-	data, err := os.ReadFile(settingsPath)
-	if err != nil {
-		return nil, fmt.Errorf("read settings file %q: %w", settingsPath, err)
+	if p.model == "" {
+		return fmt.Errorf("%s: model not configured", p.name)
 	}
-
-	var cfg settings
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parse settings file %q: %w", settingsPath, err)
-	}
-
-	return &cfg, nil
+	return validateBaseURL(p.baseURL)
 }
 
-// NewOpenAIProvider creates a provider, sourcing credentials from environment
-// variables first and falling back to ~/.gitreport/setting.json. Environment
-// variables always take precedence so they can override file settings in CI.
-func NewOpenAIProvider() (*OpenAIProvider, error) {
-	var fileKey, fileURL, fileModel string
-	if cfg, _ := loadSettings(); cfg != nil {
-		fileKey, fileURL, fileModel = cfg.APIKey, cfg.BaseURL, cfg.Model
+// NewOpenAIProvider creates a provider from the legacy flat configuration
+// (OPENAI_* environment variables, falling back to setting.json). It is kept
+// for backward compatibility and direct single-provider use.
+func NewOpenAIProvider() (*httpProvider, error) {
+	cfg, _ := loadSettings()
+	if cfg == nil {
+		cfg = &Settings{}
 	}
 
-	apiKey := firstNonEmpty(os.Getenv("OPENAI_API_KEY"), fileKey)
+	apiKey := firstNonEmpty(envValue("OPENAI_API_KEY"), cfg.APIKey)
 	if apiKey == "" {
 		return nil, fmt.Errorf("OPENAI_API_KEY is not set; run `gitreport init` then add your key, or set the environment variable")
 	}
-
-	baseURL := firstNonEmpty(os.Getenv("OPENAI_BASE_URL"), fileURL)
+	baseURL := firstNonEmpty(envValue("OPENAI_BASE_URL"), cfg.BaseURL)
 	if baseURL == "" {
 		return nil, fmt.Errorf("OPENAI_BASE_URL is not set; set it in setting.json or the environment")
 	}
 	if err := validateBaseURL(baseURL); err != nil {
 		return nil, err
 	}
-
-	model := firstNonEmpty(os.Getenv("OPENAI_MODEL"), fileModel)
+	model := firstNonEmpty(envValue("OPENAI_MODEL"), cfg.Model)
 	if model == "" {
 		return nil, fmt.Errorf("OPENAI_MODEL is not set; set it in setting.json or the environment")
 	}
 
-	return &OpenAIProvider{
-		apiKey:  apiKey,
-		baseURL: baseURL,
-		model:   model,
-		client:  &http.Client{Timeout: 5 * time.Minute},
-	}, nil
+	return newHTTPProvider("openai-compatible", apiKey, baseURL, model), nil
 }
 
 // validateBaseURL ensures the endpoint that receives the bearer token is a
@@ -91,10 +83,10 @@ func NewOpenAIProvider() (*OpenAIProvider, error) {
 func validateBaseURL(raw string) error {
 	u, err := url.Parse(raw)
 	if err != nil {
-		return fmt.Errorf("OPENAI_BASE_URL %q is not a valid URL: %w", raw, err)
+		return fmt.Errorf("base URL %q is not a valid URL: %w", raw, err)
 	}
 	if (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return fmt.Errorf("OPENAI_BASE_URL %q must be an absolute http(s) URL", raw)
+		return fmt.Errorf("base URL %q must be an absolute http(s) URL", raw)
 	}
 	return nil
 }
@@ -107,11 +99,6 @@ func firstNonEmpty(vals ...string) string {
 		}
 	}
 	return ""
-}
-
-// homeDir returns the current user's home directory on Windows, macOS, and Linux.
-func homeDir() (string, error) {
-	return os.UserHomeDir()
 }
 
 // chatRequest is the JSON body sent to the chat completions endpoint.
@@ -135,15 +122,14 @@ type sseChunk struct {
 	} `json:"choices"`
 }
 
-// Stream implements AIProvider.Stream via server-sent events (SSE).
-func (p *OpenAIProvider) Stream(ctx context.Context, system, user string) (<-chan string, <-chan error) {
+// Stream implements AIProvider via server-sent events (SSE).
+func (p *httpProvider) Stream(ctx context.Context, system, user string) (<-chan string, <-chan error) {
 	textCh := make(chan string, 64)
 	errCh := make(chan error, 1)
 
 	go func() {
 		defer close(textCh)
 		defer close(errCh)
-
 		if err := p.stream(ctx, system, user, textCh); err != nil {
 			errCh <- err
 		}
@@ -152,7 +138,7 @@ func (p *OpenAIProvider) Stream(ctx context.Context, system, user string) (<-cha
 	return textCh, errCh
 }
 
-func (p *OpenAIProvider) stream(ctx context.Context, system, user string, out chan<- string) error {
+func (p *httpProvider) stream(ctx context.Context, system, user string, out chan<- string) error {
 	body := chatRequest{
 		Model:  p.model,
 		Stream: true,
@@ -167,17 +153,14 @@ func (p *OpenAIProvider) stream(ctx context.Context, system, user string, out ch
 		return fmt.Errorf("marshaling request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		p.baseURL,
-		bytes.NewReader(payload),
-	)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("creating request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)
 	req.Header.Set("Accept", "text/event-stream")
-	// OpenRouter requires these headers
+	// OpenRouter uses these for attribution; other providers ignore them.
 	req.Header.Set("HTTP-Referer", "https://github.com/khanalsaroj/gitreport")
 	req.Header.Set("X-Title", "gitreport")
 
@@ -189,7 +172,7 @@ func (p *OpenAIProvider) stream(ctx context.Context, system, user string, out ch
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+		return &APIError{Provider: p.name, StatusCode: resp.StatusCode, Body: strings.TrimSpace(string(body))}
 	}
 
 	reader := bufio.NewReaderSize(resp.Body, 4096)
