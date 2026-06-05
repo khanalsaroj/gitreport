@@ -1,0 +1,9 @@
+# Normalize line endings to LF on checkout for all platforms so gofmt and the
+# CI format check behave identically on Windows, macOS, and Linux.
+* text=auto eol=lf
+
+# Windows-native script keeps CRLF.
+*.ps1 text eol=crlf
+
+# Compiled binaries are not text.
+*.exe binary
