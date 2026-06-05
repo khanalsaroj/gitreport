@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 
+	"github.com/khanalsaroj/gitreport/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +18,14 @@ var (
 	flagProjects string
 	flagFormat   string
 	flagOutput   string
+	flagProvider string
+	flagVerbose  bool
 )
+
+func init() {
+	rootCmd.PersistentFlags().BoolVar(&flagVerbose, "verbose", false,
+		"Log provider selection, fallback, and retries to stderr")
+}
 
 var rootCmd = &cobra.Command{
 	Use:   "gitreport",
@@ -42,7 +52,7 @@ hard-summary
   Produces more accurate, context-aware reports.
   Uses AI to understand code changes and team dynamics.
   Recommended for deeper analysis and team reports.
-  User more tokens.
+  Uses more tokens.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚙️ TIME FILTERS
@@ -82,11 +92,16 @@ gitreport hard-summary --week 1 --format markdown --output report.md
 `,
 	SilenceUsage:  true,
 	SilenceErrors: true,
+	Version:       version.String(),
 }
 
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	// Cancel in-flight work (git commands, AI streaming) on Ctrl-C or SIGTERM.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
@@ -99,6 +114,7 @@ func addCommonFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&flagProjects, "projects", "", "Comma-separated list of repository paths")
 	cmd.Flags().StringVar(&flagFormat, "format", "text", "Output format: text | markdown | json")
 	cmd.Flags().StringVar(&flagOutput, "output", "", "Output file path (default: stdout)")
+	cmd.Flags().StringVar(&flagProvider, "provider", "", "Force a specific AI provider (default: auto-detect)")
 }
 
 func validateTimeFlags() error {

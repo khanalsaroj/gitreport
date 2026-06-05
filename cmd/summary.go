@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/khanalsaroj/gitreport/internal/ai"
@@ -47,9 +45,12 @@ func runSummary(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	provider, err := ai.NewOpenAIProvider()
+	provider, err := ai.Select(cmd.Context(), ai.Options{
+		Force:  flagProvider,
+		Logger: ai.NewLogger(flagVerbose),
+	})
 	if err != nil {
-		return fmt.Errorf("initializing AI provider: %w", err)
+		return fmt.Errorf("selecting AI provider: %w", err)
 	}
 
 	sum := summarizer.NewSummary(provider, cfg)
@@ -89,8 +90,7 @@ func runSummary(cmd *cobra.Command, args []string) error {
 		commitData = strings.Join(filtered, "\n")
 	}
 
-	ctx := context.Background()
-	stream, err := sum.Stream(ctx, commitData, flagFormat, flagByAuthor)
+	stream, err := sum.Stream(cmd.Context(), commitData, flagFormat, flagByAuthor)
 	if err != nil {
 		return fmt.Errorf("generating summary: %w", err)
 	}
@@ -113,12 +113,4 @@ func formatGroupedCommits(grouped map[string][]string) string {
 		sb.WriteString("\n")
 	}
 	return sb.String()
-}
-
-func writeOutput(content string) error {
-	if flagOutput == "" {
-		fmt.Print(content)
-		return nil
-	}
-	return os.WriteFile(flagOutput, []byte(content), 0644)
 }

@@ -1,6 +1,9 @@
 package summarizer
 
-import "strings"
+import (
+	"strings"
+	"unicode/utf8"
+)
 
 // Chunker splits large text inputs into token-approximate chunks.
 type Chunker struct {
@@ -59,34 +62,48 @@ func (c *Chunker) Split(text string) []string {
 	return chunks
 }
 
-// splitOnDiffBoundary splits a diff string at "diff --git" markers.
+// splitOnDiffBoundary splits a diff string at "diff --git" markers. The
+// returned sections concatenate back to the exact input (no bytes are added or
+// dropped); each section after the first begins with a "diff --git" line.
 func splitOnDiffBoundary(text string) []string {
-	lines := strings.Split(text, "\n")
-	var sections []string
-	var current strings.Builder
+	if text == "" {
+		return nil
+	}
 
-	for _, line := range lines {
-		if strings.HasPrefix(line, "diff --git") && current.Len() > 0 {
-			sections = append(sections, current.String())
-			current.Reset()
+	const marker = "diff --git"
+	var sections []string
+	start := 0
+
+	// i is always positioned at the start of a line (0, or just past a '\n').
+	for i := 0; i < len(text); {
+		if i > start && strings.HasPrefix(text[i:], marker) {
+			sections = append(sections, text[start:i])
+			start = i
 		}
-		current.WriteString(line)
-		current.WriteByte('\n')
+		nl := strings.IndexByte(text[i:], '\n')
+		if nl < 0 {
+			break
+		}
+		i += nl + 1
 	}
-	if current.Len() > 0 {
-		sections = append(sections, current.String())
-	}
-	return sections
+
+	return append(sections, text[start:])
 }
 
-// hardSplit splits a string into chunks of maxChars, breaking at newlines where possible.
+// hardSplit splits a string into chunks of at most maxChars bytes, preferring
+// to break at a newline. When no newline is available within the limit it falls
+// back to the nearest UTF-8 rune boundary so a multi-byte character is never
+// split across two chunks.
 func hardSplit(text string, maxChars int) []string {
 	var chunks []string
 	for len(text) > maxChars {
-		// Find the last newline within the limit
 		cut := maxChars
 		if idx := strings.LastIndex(text[:cut], "\n"); idx > 0 {
 			cut = idx + 1
+		} else {
+			for cut > 1 && !utf8.RuneStart(text[cut]) {
+				cut--
+			}
 		}
 		chunks = append(chunks, text[:cut])
 		text = text[cut:]
