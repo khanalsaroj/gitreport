@@ -11,11 +11,17 @@ import (
 )
 
 // defaultSettings is the starter settings.json scaffold written by `init`.
-// The API key is intentionally left blank for the user to fill in.
+//
+// The OPENAI_* fields configure the OpenRouter fallback (leave the key blank to
+// fill in later). "priority" controls which AI provider is preferred: if Claude
+// Code is installed it is used automatically; otherwise gitreport falls back
+// down the list. Add premium providers under an optional "providers" block —
+// see docs/PROVIDERS.md.
 const defaultSettings = `{
   "OPENAI_API_KEY": "",
   "OPENAI_BASE_URL": "https://openrouter.ai/api/v1/chat/completions",
-  "OPENAI_MODEL": "nvidia/nemotron-3-super-120b-a12b:free"
+  "OPENAI_MODEL": "nvidia/nemotron-3-super-120b-a12b:free",
+  "priority": ["claude-code", "openai", "gemini", "grok", "openrouter"]
 }
 `
 

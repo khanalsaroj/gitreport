@@ -49,34 +49,6 @@ func (p *httpProvider) Available(ctx context.Context) error {
 	return validateBaseURL(p.baseURL)
 }
 
-// NewOpenAIProvider creates a provider from the legacy flat configuration
-// (OPENAI_* environment variables, falling back to setting.json). It is kept
-// for backward compatibility and direct single-provider use.
-func NewOpenAIProvider() (*httpProvider, error) {
-	cfg, _ := loadSettings()
-	if cfg == nil {
-		cfg = &Settings{}
-	}
-
-	apiKey := firstNonEmpty(envValue("OPENAI_API_KEY"), cfg.APIKey)
-	if apiKey == "" {
-		return nil, fmt.Errorf("OPENAI_API_KEY is not set; run `gitreport init` then add your key, or set the environment variable")
-	}
-	baseURL := firstNonEmpty(envValue("OPENAI_BASE_URL"), cfg.BaseURL)
-	if baseURL == "" {
-		return nil, fmt.Errorf("OPENAI_BASE_URL is not set; set it in setting.json or the environment")
-	}
-	if err := validateBaseURL(baseURL); err != nil {
-		return nil, err
-	}
-	model := firstNonEmpty(envValue("OPENAI_MODEL"), cfg.Model)
-	if model == "" {
-		return nil, fmt.Errorf("OPENAI_MODEL is not set; set it in setting.json or the environment")
-	}
-
-	return newHTTPProvider("openai-compatible", apiKey, baseURL, model), nil
-}
-
 // validateBaseURL ensures the endpoint that receives the bearer token is a
 // well-formed absolute http(s) URL. This avoids transmitting the API key to a
 // malformed or unexpected (e.g. file://) destination.

@@ -45,9 +45,12 @@ func runSummary(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	provider, err := ai.NewOpenAIProvider()
+	provider, err := ai.Select(cmd.Context(), ai.Options{
+		Force:  flagProvider,
+		Logger: ai.NewLogger(flagVerbose),
+	})
 	if err != nil {
-		return fmt.Errorf("initializing AI provider: %w", err)
+		return fmt.Errorf("selecting AI provider: %w", err)
 	}
 
 	sum := summarizer.NewSummary(provider, cfg)
