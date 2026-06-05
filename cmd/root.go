@@ -18,7 +18,14 @@ var (
 	flagProjects string
 	flagFormat   string
 	flagOutput   string
+	flagProvider string
+	flagVerbose  bool
 )
+
+func init() {
+	rootCmd.PersistentFlags().BoolVar(&flagVerbose, "verbose", false,
+		"Log provider selection, fallback, and retries to stderr")
+}
 
 var rootCmd = &cobra.Command{
 	Use:   "gitreport",
@@ -107,6 +114,7 @@ func addCommonFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&flagProjects, "projects", "", "Comma-separated list of repository paths")
 	cmd.Flags().StringVar(&flagFormat, "format", "text", "Output format: text | markdown | json")
 	cmd.Flags().StringVar(&flagOutput, "output", "", "Output file path (default: stdout)")
+	cmd.Flags().StringVar(&flagProvider, "provider", "", "Force a specific AI provider (default: auto-detect)")
 }
 
 func validateTimeFlags() error {
